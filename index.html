@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数学勇者 V8.1 - 魔法少女版</title>
+    <style>
+        /* --- 基础布局 --- */
+        body {
+            margin: 0; padding: 0;
+            background-color: #000;
+            font-family: "Comic Sans MS", "Chalkboard SE", "Microsoft YaHei", sans-serif; /* 增加中文字体支持 */
+            color: #eee;
+            display: flex; justify-content: center; align-items: center;
+            height: 100vh; overflow: hidden; user-select: none;
+        }
+        #game-container {
+            /* 背景微调，加一点点紫色的魔法感 */
+            background: linear-gradient(180deg, #3a2c50 0%, #000000 100%);
+            width: 100%; max-width: 600px; height: 100vh; max-height: 800px;
+            display: flex; flex-direction: column; position: relative;
+            box-shadow: 0 0 50px rgba(0,0,0,0.8); overflow: hidden;
+        }
+        
+        /* 战场 */
+        .battle-field {
+            flex: 1;
+            background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            position: relative; display: flex; justify-content: space-between; align-items: flex-end; padding: 30px 40px;
+        }
+        .character { width: 140px; text-align: center; position: relative; z-index: 2; }
+        
+        /* 头像样式 */
+        .avatar { 
+            font-size: 5.5rem; 
+            filter: drop-shadow(0 10px 20px rgba(0,0,0,0.6)); 
+            display: inline-block; 
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+        }
+        
+        /* 职业称号标签 */
+        .job-badge {
+            background: #f39c12; color: #2c3e50; font-size: 0.9rem; padding: 3px 10px;
+            border-radius: 12px; font-weight: bold; display: inline-block; margin-bottom: 6px;
+            border: 2px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
+
+        /* 血条与XP条 */
+        .hp-bar-container {
+            width: 100%; height: 10px; background: #333; border-radius: 5px;
+            margin-bottom: 4px; border: 1px solid #000; overflow: hidden;
+        }
+        .hp-bar-fill { height: 100%; width: 100%; transition: width 0.3s ease-out; }
+        
+        .xp-bar-container {
+            width: 100%; height: 6px; background: #444; border-radius: 3px;
+            margin-bottom: 8px; overflow: hidden; border: 1px solid #000;
+        }
+        /* XP条颜色改成粉色 */
+        .xp-bar-fill {
+            height: 100%; width: 0%; background: #ff79c6; box-shadow: 0 0 8px #ff79c6;
+            transition: width 0.3s ease-out;
+        }
+        
+        .hp-text { font-size: 0.9rem; color: #ccc; margin-bottom: 2px; font-weight: bold; text-shadow: 1px 1px 0 #000; display: flex; justify-content: space-between;}
+
+        /* --- 动画特效 --- */
+        .screen-shake { animation: shake-hard 0.3s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake-hard {
+            10%, 90% { transform: translate3d(-5px, -5px, 0); }
+            20%, 80% { transform: translate3d(5px, 5px, 0); }
+            30%, 50%, 70% { transform: translate3d(-8px, 3px, 0); }
+            40%, 60% { transform: translate3d(8px, -3px, 0); }
+        }
+
+        /* 进化动画：改成粉色/金色闪光 */
+        .evolution-anim { animation: evolve-flash 1.2s ease-in-out; }
+        @keyframes evolve-flash {
+            0% { transform: scale(1) rotate(0); filter: brightness(1); }
+            50% { transform: scale(1.5) rotate(360deg); filter: brightness(3) drop-shadow(0 0 40px #ff79c6); }
+            100% { transform: scale(1) rotate(720deg); filter: brightness(1); }
+        }
+
+        /* 复活光效 */
+        .revive-anim { animation: revive-glow 1s ease-out; }
+        @keyframes revive-glow {
+            0% { filter: brightness(1) sepia(1) hue-rotate(50deg); transform: scale(0.8); opacity: 0.5; }
+            50% { filter: brightness(3) sepia(0) hue-rotate(0deg) drop-shadow(0 0 40px #2ecc71); transform: scale(1.2); opacity: 1; }
+            100% { filter: brightness(1); transform: scale(1); }
+        }
+
+        /* 攻击特效 - 改成魔法弹 */
+        .slash-effect { position: absolute; top: 50%; left: 50%; width: 150px; height: 150px; pointer-events: none; z-index: 10; transform: translate(-50%, -50%); }
+        .slash-blade {
+            position: absolute; top: 50%; left: 50%; width: 30px; height: 30px; 
+            background: #fff; border-radius: 50%;
+            box-shadow: 0 0 10px #fff, 0 0 30px #bd93f9, 0 0 50px #ff79c6; /* 紫粉色魔法光辉 */
+            transform: translate(-50%, -50%) scale(0); opacity: 0;
+        }
+        .anim-slash .slash-blade { animation: magic-burst 0.4s ease-out forwards; }
+        @keyframes magic-burst { 
+            0% { transform: translate(-50%, -50%) scale(0.2); opacity: 1; } 
+            100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; } 
+        }
+        
+        .claw-effect { position: absolute; top: 50%; left: 50%; width: 150px; height: 150px; transform: translate(-50%, -50%); pointer-events: none; z-index: 10; }
+        .claw-mark { position: absolute; width: 100%; height: 10px; background: #ff0000; border-radius: 50%; box-shadow: 0 0 10px #ff0000; opacity: 0; }
+        .anim-claw .claw-mark:nth-child(1) { top: 30%; transform: rotate(15deg); animation: claw-swipe 0.3s ease-out forwards; }
+        .anim-claw .claw-mark:nth-child(2) { top: 50%; transform: rotate(15deg); animation: claw-swipe 0.3s 0.1s ease-out forwards; }
+        .anim-claw .claw-mark:nth-child(3) { top: 70%; transform: rotate(15deg); animation: claw-swipe 0.3s 0.2s ease-out forwards; }
+        @keyframes claw-swipe { 0% { width: 0; left: 0; opacity: 0; } 50% { opacity: 1; } 100% { width: 100%; left: 0; opacity: 0; } }
+        
+        .take-damage { animation: flash-red 0.4s; }
+        @keyframes flash-red { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(5) sepia(1) hue-rotate(-50deg) saturate(5); } }
+        
+        .float-text {
+            position: absolute; font-family: 'Impact', sans-serif; font-weight: bold; pointer-events: none;
+            animation: float-up 0.8s forwards; text-shadow: 2px 2px 0 #000; z-index: 20; width: 300px; text-align: center;
+            left: 50%; transform: translateX(-50%);
+        }
+        @keyframes float-up { 0% { top: -20px; opacity: 0; transform: translateX(-50%) scale(0.5); } 20% { top: -60px; opacity: 1; transform: translateX(-50%) scale(1.2); } 100% { top: -100px; opacity: 0; transform: translateX(-50%) scale(1); } }
+
+        /* 控制台 */
+        .console-area {
+            background: #222; padding: 20px; border-top: 4px solid #444;
+            display: flex; flex-direction: column; align-items: center; height: 35%;
+        }
+        #question { font-size: 3rem; margin: 10px 0; font-weight: bold; color: #fff; }
+        input[type="number"] {
+            background: rgba(255,255,255,0.1); border: 2px solid #666; border-radius: 8px; color: #fff;
+            font-size: 2.5rem; width: 160px; text-align: center; padding: 5px; outline: none; margin-bottom: 15px;
+        }
+        .btn {
+            background: #e67e22; color: white; border: none; padding: 12px 40px; font-size: 1.5rem; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 0 #d35400;
+        }
+        .btn:active { transform: translateY(4px); box-shadow: none; }
+
+        /* 弹窗 */
+        .modal-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 50;
+        }
+        /* 标题颜色改成粉色 */
+        .modal-title { color: #ff79c6; font-size: 2.5rem; margin-bottom: 30px; text-shadow: 0 0 10px #bd93f9; }
+        
+        .difficulty-btn {
+            margin: 10px; padding: 20px 40px; font-size: 1.5rem; width: 300px; background: #34495e; color: #fff;
+            border: 3px solid #7f8c8d; border-radius: 15px; cursor: pointer; transition: 0.2s;
+        }
+        .difficulty-btn:hover { background: #2c3e50; border-color: #fff; transform: scale(1.05); }
+        .diff-hard { border-color: #e74c3c; color: #e74c3c; }
+        .diff-hard:hover { background: #c0392b; color: white; }
+
+        /* 复活按钮组 */
+        .btn-group { display: flex; flex-direction: column; gap: 15px; width: 80%; max-width: 300px; }
+        .btn-continue { background: #27ae60; box-shadow: 0 4px 0 #1e8449; }
+        .btn-restart-gray { background: #7f8c8d; box-shadow: 0 4px 0 #566573; font-size: 1.2rem; }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div class="battle-field">
+            <div class="character" id="hero">
+                <div class="job-badge" id="hero-class" style="background: #bdc3c7; color: #2c3e50;">小小冒险家</div>
+                <div class="hp-text">
+                    <span>Lv.<span id="hero-lvl-text">1</span></span>
+                    <span style="color:#f1c40f">ATK <span id="hero-atk-text">20</span></span>
+                </div>
+                <div class="xp-bar-container">
+                    <div class="xp-bar-fill" id="hero-xp-bar"></div>
+                </div>
+                <div class="hp-bar-container"><div class="hp-bar-fill" id="hero-hp-bar" style="background: #2ecc71;"></div></div>
+                <div class="avatar" id="hero-avatar">👧</div>
+            </div>
+            
+            <div class="character" id="monster">
+                <div class="job-badge" style="background: #555; color:#ccc">敌人</div>
+                <div class="hp-text" id="monster-name">怪物</div>
+                <div class="xp-bar-container" style="opacity: 0;"></div>
+                <div class="hp-bar-container"><div class="hp-bar-fill" id="monster-hp-bar" style="background: #e74c3c;"></div></div>
+                <div class="avatar" id="monster-avatar">👾</div>
+            </div>
+        </div>
+
+        <div class="console-area">
+            <div style="color:#888">击杀数: <span id="kill-count" style="color:#fff">0</span></div>
+            <div id="question">Ready?</div>
+            <input type="number" id="answer-input" placeholder="?" disabled>
+            <button id="action-btn" class="btn" style="background: #bd93f9; box-shadow: 0 4px 0 #8e44ad;">施放魔法</button>
+        </div>
+
+        <div id="start-modal" class="modal-overlay">
+            <h1 class="modal-title">✨ 魔法少女试炼 ✨</h1>
+            <button id="btn-easy" class="difficulty-btn">🟢 初级 (50以内)</button>
+            <button id="btn-hard" class="difficulty-btn diff-hard">🔴 高级 (100以内)</button>
+            <p style="color:#bd93f9; margin-top: 20px; font-size: 1rem;">*努力答题，华丽变身！</p>
+        </div>
+
+        <div id="game-over-modal" class="modal-overlay" style="display: none;">
+            <h1 style="color: #e74c3c; font-size: 3rem;">魔力耗尽...</h1>
+            <p style="font-size: 1.2rem; color:#ccc; margin-bottom: 30px;">
+                当前形态: <span id="final-job" style="color: #ff79c6">小小冒险家</span> (Lv.<span id="final-lvl">1</span>)
+            </p>
+            
+            <div class="btn-group">
+                <button id="btn-continue" class="btn btn-continue">💎 恢复魔力 (继续挑战)</button>
+                <button id="btn-restart" class="btn btn-restart-gray">🔄 重新开始试炼</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- ✨ 全新女生向进化路线 ✨ ---
+        const HERO_RANKS = [
+            { lvl: 1, icon: "👧", name: "小小冒险家", color: "#bdc3c7" }, // 灰色初始
+            { lvl: 3, icon: "🎀", name: "魔法少女", color: "#ff9ff3" },   // 粉色
+            { lvl: 6, icon: "🧚‍♀️", name: "精灵射手", color: "#2ecc71" }, // 绿色
+            { lvl: 10, icon: "🦄", name: "独角兽骑士", color: "#9b59b6" }, // 紫色
+            { lvl: 15, icon: "👸", name: "数学公主", color: "#f1c40f" },  // 金色
+            { lvl: 20, icon: "💖", name: "智慧女王", color: "#ffffff" }   // 白色终极
+        ];
+
+        const CONFIG = { baseHeroHP: 100, baseHeroDamage: 20, baseMonsterHP: 30, monsterDamage: 25, baseXPNeed: 50 };
+        // 怪物也稍微可爱一点点
+        const MONSTERS = [
+            { emoji: "🍄", name: "坏蘑菇", color: "#e74c3c" }, 
+            { emoji: "👻", name: "调皮幽灵", color: "#bd93f9" },
+            { emoji: "🦇", name: "吸血小蝙蝠", color: "#3498db" }, 
+            { emoji: "🧟", name: "呆呆僵尸", color: "#27ae60" },
+            { emoji: "🐉", name: "喷火龙", color: "#e67e22" }, 
+            { emoji: "😈", name: "大魔王", color: "#f1c40f" }
+        ];
+        
+        let state = { 
+            playing: false, difficultyMax: 100, 
+            heroLevel: 1, heroXP: 0, xpToNextLevel: 50,
+            heroMaxHP: 100, heroHP: 100, heroDamage: 20,
+            monsterHP: 30, monsterMaxHP: 30, 
+            kills: 0, currentAnswer: 0 
+        };
+        
+        let audioCtx = null;
+
+        const el = {
+            container: document.getElementById('game-container'),
+            heroHP: document.getElementById('hero-hp-bar'), monsterHP: document.getElementById('monster-hp-bar'),
+            heroXP: document.getElementById('hero-xp-bar'),
+            heroLvl: document.getElementById('hero-lvl-text'), heroAtk: document.getElementById('hero-atk-text'),
+            heroClass: document.getElementById('hero-class'),
+            mAvatar: document.getElementById('monster-avatar'), mName: document.getElementById('monster-name'),
+            heroAvatar: document.getElementById('hero-avatar'), heroObj: document.getElementById('hero'),
+            q: document.getElementById('question'), in: document.getElementById('answer-input'),
+            startModal: document.getElementById('start-modal'), gameOverModal: document.getElementById('game-over-modal'),
+            kills: document.getElementById('kill-count'), 
+            finalLvl: document.getElementById('final-lvl'), finalJob: document.getElementById('final-job'),
+            btnAction: document.getElementById('action-btn'),
+            btnEasy: document.getElementById('btn-easy'), btnHard: document.getElementById('btn-hard'),
+            btnContinue: document.getElementById('btn-continue'), btnRestart: document.getElementById('btn-restart')
+        };
+
+        function initAudio() {
+            if (!audioCtx) { try { const AC = window.AudioContext || window.webkitAudioContext; if (AC) audioCtx = new AC(); } catch(e) {} }
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        // 音效稍微调高一点音调，听起来更轻快
+        function playSound(type) {
+            if (!audioCtx) return;
+            try {
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                const now = audioCtx.currentTime;
+                if (type === 'slash') { // 魔法攻击音效
+                    osc.type = 'sine'; osc.frequency.setValueAtTime(800, now); osc.frequency.exponentialRampToValueAtTime(200, now+0.3);
+                    gain.gain.setValueAtTime(0.3, now); gain.gain.linearRampToValueAtTime(0, now+0.3); osc.start(); osc.stop(now+0.3);
+                } else if (type === 'claw') {
+                    osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, now); osc.frequency.linearRampToValueAtTime(50, now+0.2);
+                    gain.gain.setValueAtTime(0.3, now); gain.gain.linearRampToValueAtTime(0, now+0.2); osc.start(); osc.stop(now+0.2);
+                } else if (type === 'win') {
+                    osc.type = 'sine'; osc.frequency.setValueAtTime(600, now); osc.frequency.exponentialRampToValueAtTime(1200, now+0.4);
+                    gain.gain.setValueAtTime(0.2, now); gain.gain.linearRampToValueAtTime(0, now+0.4); osc.start(); osc.stop(now+0.4);
+                } else if (type === 'levelup') {
+                    osc.type = 'triangle'; osc.frequency.setValueAtTime(500, now); osc.frequency.setValueAtTime(700, now+0.1); osc.frequency.setValueAtTime(900, now+0.2);
+                    gain.gain.setValueAtTime(0.2, now); gain.gain.linearRampToValueAtTime(0, now+0.5); osc.start(); osc.stop(now+0.5);
+                } else if (type === 'revive') {
+                    osc.type = 'sine'; osc.frequency.setValueAtTime(400, now); osc.frequency.linearRampToValueAtTime(1000, now+1);
+                    gain.gain.setValueAtTime(0.3, now); gain.gain.linearRampToValueAtTime(0, now+1); osc.start(); osc.stop(now+1);
+                }
+                // 进化音效增加一种blingbling的感觉
+                else if (type === 'evolve') {
+                     osc.type = 'sine';
+                     osc.frequency.setValueAtTime(600, now); osc.frequency.linearRampToValueAtTime(1500, now + 1.2);
+                     gain.gain.setValueAtTime(0.4, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 1.2);
+                     osc.start(); osc.stop(now + 1.2);
+                }
+            } catch(e) {}
+        }
+
+        function startGame(maxRange) {
+            initAudio();
+            state.difficultyMax = maxRange; state.playing = true;
+            
+            state.heroLevel = 1; state.heroXP = 0; state.xpToNextLevel = CONFIG.baseXPNeed;
+            state.heroMaxHP = CONFIG.baseHeroHP; state.heroHP = CONFIG.baseHeroHP;
+            state.heroDamage = CONFIG.baseHeroDamage; state.kills = 0;
+            
+            el.startModal.style.display = "none"; el.gameOverModal.style.display = "none";
+            el.in.disabled = false; el.in.value = ''; el.in.focus(); el.kills.innerText = "0";
+            
+            updateAvatarDisplay(); updateBars(); spawnMonster(); nextQuestion();
+        }
+
+        function continueGame() {
+            state.heroHP = state.heroMaxHP; state.playing = true;
+            el.gameOverModal.style.display = "none"; el.in.disabled = false; el.in.value = ''; el.in.focus();
+            playSound('revive'); updateBars();
+            showFloatText(el.heroObj, "魔力恢复!", "#2ecc71", 3);
+            el.heroAvatar.classList.add('revive-anim'); setTimeout(() => el.heroAvatar.classList.remove('revive-anim'), 1000);
+        }
+
+        function showStartScreen() { el.gameOverModal.style.display = "none"; el.startModal.style.display = "flex"; }
+
+        function spawnMonster() {
+            const diff = Math.min(Math.floor(state.kills/3), MONSTERS.length-1); const m = MONSTERS[diff];
+            state.monsterMaxHP = Math.floor(CONFIG.baseMonsterHP + (state.kills * state.heroDamage * 0.8));
+            state.monsterHP = state.monsterMaxHP;
+            el.mName.innerText = `Lv.${state.kills+1} ${m.name}`; el.mAvatar.innerText = m.emoji;
+            el.monsterHP.parentElement.style.borderColor = m.color; el.monsterHP.style.background = m.color;
+            el.mAvatar.style.transform = "scale(0) rotate(-180deg)";
+            setTimeout(() => el.mAvatar.style.transform = "scale(1) rotate(0)", 100);
+            updateBars();
+        }
+
+        function nextQuestion() {
+            const max = state.difficultyMax; const min = 10;
+            const isAdd = Math.random() > 0.5; let n1, n2;
+            if(isAdd) {
+                n1 = Math.floor(Math.random()*(max-20))+min; n2 = Math.floor(Math.random()*(max-n1-min))+min;
+                state.currentAnswer = n1+n2; el.q.innerText = `${n1} + ${n2} = ?`;
+            } else {
+                n1 = Math.floor(Math.random()*(max-20))+20; n2 = Math.floor(Math.random()*(n1-min))+min;
+                state.currentAnswer = n1-n2; el.q.innerText = `${n1} - ${n2} = ?`;
+            }
+        }
+
+        function checkAnswer() {
+            const val = parseInt(el.in.value); if(isNaN(val)) return;
+            val === state.currentAnswer ? doHeroAttack() : doMonsterAttack();
+            el.in.value = ''; el.in.focus();
+        }
+
+        function doHeroAttack() {
+            playSound('slash'); showSlashEffect(document.getElementById('monster')); shakeScreen();
+            setTimeout(() => {
+                el.mAvatar.classList.add('take-damage');
+                showFloatText(document.getElementById('monster'), `-${state.heroDamage}`, "#ff79c6"); // 伤害数字变成粉色
+                state.monsterHP -= state.heroDamage;
+                updateBars();
+                setTimeout(() => el.mAvatar.classList.remove('take-damage'), 400);
+                if(state.monsterHP <= 0) monsterDie(); else nextQuestion();
+            }, 100);
+        }
+
+        function doMonsterAttack() {
+            playSound('claw'); showClawEffect(document.getElementById('hero')); shakeScreen();
+            setTimeout(() => {
+                el.heroAvatar.classList.add('take-damage');
+                showFloatText(document.getElementById('hero'), `-${CONFIG.monsterDamage}`, "#e74c3c");
+                state.heroHP -= CONFIG.monsterDamage;
+                updateBars();
+                setTimeout(() => el.heroAvatar.classList.remove('take-damage'), 400);
+                if(state.heroHP <= 0) gameOver();
+            }, 100);
+        }
+
+        function gainXP(amount) {
+            state.heroXP += amount; if (state.heroXP >= state.xpToNextLevel) levelUp(); updateBars();
+        }
+
+        function levelUp() {
+            state.heroLevel++; state.heroXP = 0; state.xpToNextLevel = Math.floor(state.xpToNextLevel * 1.2);
+            state.heroMaxHP += 20; state.heroDamage += 5; state.heroHP = state.heroMaxHP;
+            if (updateAvatarDisplay()) {
+                playSound('evolve'); showFloatText(el.heroObj, "华丽变身!", "#ff79c6", 3); // 进化提示改成中文
+                el.heroAvatar.classList.add('evolution-anim'); setTimeout(() => el.heroAvatar.classList.remove('evolution-anim'), 1200);
+            } else {
+                playSound('levelup'); showFloatText(el.heroObj, "等级提升!", "#2ecc71");
+            }
+        }
+        
+        function updateAvatarDisplay() {
+            let currentRank = HERO_RANKS[0];
+            for (let r of HERO_RANKS) if (state.heroLevel >= r.lvl) currentRank = r;
+            const oldIcon = el.heroAvatar.innerText;
+            if (oldIcon !== currentRank.icon) {
+                el.heroAvatar.innerText = currentRank.icon;
+                el.heroClass.innerText = currentRank.name;
+                el.heroClass.style.background = currentRank.color;
+                el.heroClass.style.color = currentRank.name === "智慧女王" ? "#000" : "#2c3e50";
+                return true;
+            }
+            return false;
+        }
+
+        function monsterDie() {
+            playSound('win'); state.kills++; el.kills.innerText = state.kills;
+            el.mAvatar.style.transition = "transform 0.5s"; el.mAvatar.style.transform = "scale(0) rotate(360deg)";
+            const xpGain = 50 + (state.kills * 2); gainXP(xpGain);
+            setTimeout(() => { spawnMonster(); nextQuestion(); }, 600);
+        }
+
+        function gameOver() {
+            state.playing = false; 
+            el.finalLvl.innerText = state.heroLevel; el.finalJob.innerText = el.heroClass.innerText;
+            el.gameOverModal.style.display = "flex"; el.in.disabled = true;
+        }
+
+        function updateBars() {
+            el.heroHP.style.width = Math.max(0, (state.heroHP/state.heroMaxHP)*100) + '%';
+            el.monsterHP.style.width = Math.max(0, (state.monsterHP/state.monsterMaxHP)*100) + '%';
+            el.heroXP.style.width = Math.min(100, (state.heroXP/state.xpToNextLevel)*100) + '%';
+            el.heroLvl.innerText = state.heroLevel; el.heroAtk.innerText = state.heroDamage;
+        }
+
+        function showFloatText(target, text, color, fontSize = 2.5) {
+            const rect = target.getBoundingClientRect(); const cRect = el.container.getBoundingClientRect();
+            const div = document.createElement('div'); div.innerText = text; div.className = 'float-text'; 
+            div.style.color = color; div.style.fontSize = fontSize + 'rem';
+            div.style.left = (rect.left - cRect.left + rect.width/2) + 'px'; div.style.top = (rect.top - cRect.top) + 'px';
+            el.container.appendChild(div); setTimeout(() => div.remove(), 800);
+        }
+
+        // 特效改成魔法光爆
+        function showSlashEffect(target) {
+            const rect = target.getBoundingClientRect(); const cRect = el.container.getBoundingClientRect();
+            const div = document.createElement('div'); div.className = 'slash-effect anim-slash'; div.innerHTML = '<div class="slash-blade"></div>';
+            div.style.left = (rect.left - cRect.left + rect.width/2) + 'px'; div.style.top = (rect.top - cRect.top + rect.height/2) + 'px';
+            el.container.appendChild(div); setTimeout(() => div.remove(), 500);
+        }
+        function showClawEffect(target) {
+            const rect = target.getBoundingClientRect(); const cRect = el.container.getBoundingClientRect();
+            const div = document.createElement('div'); div.className = 'claw-effect anim-claw'; div.innerHTML = '<div class="claw-mark"></div><div class="claw-mark"></div><div class="claw-mark"></div>';
+            div.style.left = (rect.left - cRect.left + rect.width/2) + 'px'; div.style.top = (rect.top - cRect.top + rect.height/2) + 'px';
+            el.container.appendChild(div); setTimeout(() => div.remove(), 500);
+        }
+        function shakeScreen() { el.container.classList.add('screen-shake'); setTimeout(() => el.container.classList.remove('screen-shake'), 300); }
+
+        el.btnEasy.addEventListener('click', () => startGame(50));
+        el.btnHard.addEventListener('click', () => startGame(100));
+        el.btnAction.addEventListener('click', checkAnswer);
+        el.btnRestart.addEventListener('click', showStartScreen);
+        el.btnContinue.addEventListener('click', continueGame); 
+        el.in.addEventListener('keypress', (e) => { if(e.key === 'Enter' && state.playing) checkAnswer(); });
+
+        console.log("Magical Girl V8.1 Ready");
+    </script>
+</body>
+</html>
